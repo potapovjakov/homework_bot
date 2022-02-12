@@ -9,7 +9,7 @@ class DataCheck(Exception):
 
 
 class UrlNotAccess(Exception):
-    """Проверка доступности эндпоинта"""
+    """Проверка доступности эндпоинта."""
     def __init__(self, endpoint):
         self.endpoint = endpoint
         self.message = f'Ошибка подключения к {endpoint}'
@@ -20,7 +20,7 @@ class UrlNotAccess(Exception):
 
 
 class ApiDataIsEmpty(Exception):
-    """Проверка данных API"""
+    """Проверка данных API."""
     def __init__(self, endpoint):
         self.endpoint = endpoint
         self.message = f'Из {endpoint} получены некорректные данные'
