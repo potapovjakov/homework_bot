@@ -1,7 +1,7 @@
+import json.decoder
 import logging
 import os
 import time
-from http import HTTPStatus
 from logging import Formatter, StreamHandler
 from logging.handlers import RotatingFileHandler
 
@@ -9,7 +9,7 @@ import requests
 import telegram
 from dotenv import load_dotenv
 
-from exceptions import ApiDataIsEmpty, DataCheck, UrlNotAccess
+from exceptions import DataCheck
 
 load_dotenv()
 
@@ -44,7 +44,7 @@ def send_message(bot, message):
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.info(f'Отправлено сообщение: {message}')
-    except Exception:
+    except telegram.TelegramError:
         logger.error(
             'Ошибка при отправке сообщения'
         )
@@ -52,18 +52,21 @@ def send_message(bot, message):
 
 def get_api_answer(current_timestamp):
     """Делает запрос к эндпоинту API-сервиса."""
-    logger.info('Запрос отправлен')
+    logger.info('Отправляем запрос...')
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
         api_answer = requests.get(ENDPOINT, headers=HEADERS, params=params)
-    except Exception:
-        raise UrlNotAccess(ENDPOINT)
-    if api_answer.status_code != HTTPStatus.OK:
-        raise UrlNotAccess(ENDPOINT)
-    if api_answer:
+        if api_answer.status_code != requests.codes.ok:
+            api_answer.raise_for_status()
+        logger.info('...Запрос отправлен!')
         return api_answer.json()
-    raise ApiDataIsEmpty(ENDPOINT)
+    except json.decoder.JSONDecodeError:
+        logger.error('Ответ содержит не JSON')
+    except requests.exceptions.RequestException as error:
+        message = f'При выполнении запроса возникла ошибка:{error}!'
+        logging.error(message)
+        raise requests.exceptions.RequestException(message)
 
 
 def check_response(response):
@@ -82,8 +85,12 @@ def check_response(response):
 def parse_status(homework):
     """Извлекает из конкретной домашки ее статус."""
     homework_name = homework.get('homework_name')
+    if 'homework_name' not in homework:
+        raise KeyError(
+            'Отсутствует ключ homework_name'
+        )
     homework_status = homework.get('status')
-    if homework_name is None and homework_status is None:
+    if homework_status is None:
         raise DataCheck()
     try:
         verdict = HOMEWORK_STATUSES[homework_status]
@@ -119,7 +126,7 @@ def main():
             current_timestamp = response.get('current_date', current_timestamp)
             time.sleep(RETRY_TIME)
         except Exception as error:
-            message = f'Сбой в работе программы: {error}'
+            message = f'Сбой в работе программы: {error}!'
             logger.exception(message, exc_info=True)
             if str(error) != str(var_error):
                 var_error = error
